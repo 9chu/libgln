@@ -1,6 +1,6 @@
 ## libgln
 
-GLN(general list-based notation)是一种轻量级的数据描述格式，以列表作为唯一一种数据结构用于数据存储与交换。
+GLN(General purpose List-based Notation)是一种轻量级的数据描述格式，以列表作为唯一一种数据结构用于数据存储与交换。
 
 libgln实现一套基于这种语法的解析库。
 
