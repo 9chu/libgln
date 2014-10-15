@@ -46,12 +46,12 @@ GLN允许在字符串、字符或者符号中使用'\'作为转义字符，其�
 
 #### 词法元素表达式
 - BlankCharacter => \[\t\v\r\n \]
-- TerminalCharacter => \[\\\[\{()\}\\\];:\]
+- TerminalCharacter => \[\\\[\{()\}\\\];:\t\v\r\n \]
 - Comment => ;.*$
 - CharacterLiteral => ' _任意单个字符或单个字符的转义_ '
 - StringLiteral => ' _任意多个字符或字符的转义_ '
 - ReservedSymbolLiteral => #\[^TerminalCharacter\]*
-- SymbolLiteral => _任意多个不为BlankCharacter或TerminalCharacter的字符或任意字符的转义，且不与ReservedSymbolLiteral和NumberLiteral冲突_
+- SymbolLiteral => _任意多个不为TerminalCharacter的字符或任意字符的转义，且不与ReservedSymbolLiteral和NumberLiteral冲突_
 - NumberCharacter => \[0-9\]
 - NonZeroNumberCharacter => \[1-9\]
 - HexNumberCharacter => \[a-fA-F0-9\]

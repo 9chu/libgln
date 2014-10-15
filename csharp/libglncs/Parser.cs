@@ -34,6 +34,7 @@ namespace Bakachu.GLN
         /// </summary>
         public enum DataFormatType
         {
+            None,         // 正常格式
             HexInteger,   // 十六进制整数
             SList,        // S-expr
             TList,        // T-expr
@@ -321,7 +322,7 @@ namespace Bakachu.GLN
                 case ':':
                     return true;
                 default:
-                    return false;
+                    return IsBlankCharacter(c);
             }
         }
 
@@ -509,29 +510,232 @@ namespace Bakachu.GLN
         }
 
         // 解析数字
-        private static object ParseNumber(ParseContext Context, out DataFormatType FormatType)
+        private static object ParseUnsignedNumber(ParseContext Context, out DataFormatType FormatType)
         {
+            bool bCastToDouble = false;
+            FormatType = DataFormatType.None;
 
-        }
+            int c = Context.Peek();
 
-        // 进行解析
-        private static void DoParse(ParseContext Context)
-        {
-            while (true)
+            // ===== 整数部分 =====
+            ulong tIntPart = 0;
+            if (c == '0')  // 读取0或者0x
             {
-                // 跳过空白
-                SkipBlank(Context);
-
-                switch (Context.Peek())
+                Context.Read();
+                c = Context.Peek();
+                if (c == 'x')
                 {
-                    case -1:  // EOF
-                        Context.Listener.OnReachEOF(Context);
-                        return;
-                    case ';':  // 注释
-                        throw new NotImplementedException();
-                    case ''
+                    Context.Read();
+
+                    int len = 0;
+                    while (true)
+                    {
+                        int t;
+                        c = Context.Read();
+                        if (IsHexNumberCharacter((char)c, out t))
+                        {
+                            len++;
+                            if (len > 16)
+                                throw new ParseException("integer literal is too long.", Context);
+                            tIntPart = (tIntPart << 4) + (ulong)t;
+                        }
+                        else
+                            throw new ParseException(
+                                String.Format("expected hex number but found '{0}'.", c == -1 ? "<EOF>" : ((char)c).ToString()),
+                                Context
+                                );
+
+                        c = Context.Peek();
+                        if (IsTerminalCharacter((char)c) || c == -1)
+                            break;
+                    }
+
+                    FormatType = DataFormatType.HexInteger;
+                    return tIntPart;
                 }
             }
+            else if (IsNonZeroNumberCharacter((char)c))  // 读取数字
+            {
+                while (true)
+                {
+                    c = Context.Read();
+                    if (IsNumberCharacter((char)c))
+                    {
+                        tIntPart = tIntPart * 10 + (ulong)(c - '0');
+                    }
+                    else
+                        throw new ParseException(
+                            String.Format("expected decimal number but found '{0}'.", c == -1 ? "<EOF>" : ((char)c).ToString()),
+                            Context
+                            );
+
+                    c = Context.Peek();
+                    if (IsTerminalCharacter((char)c) || c == -1 || c == '.' || c == 'e' || c == 'E')
+                        break;
+                }
+            }
+            else
+                throw new ParseException(
+                    String.Format("expected number but found '{0}'.", c == -1 ? "<EOF>" : ((char)c).ToString()),
+                    Context
+                    );
+
+            // ===== 小数部分 =====
+            double tFracPart = 0;
+            c = Context.Peek();
+            if (c == '.')
+            {
+                c = Context.Read();
+
+                double tFracExp = 0.1;
+                while (true)
+                {
+                    c = Context.Read();
+                    if (IsNumberCharacter((char)c))
+                    {
+                        tFracPart += (double)(c - '0') * tFracExp;
+                        tFracExp /= 10;
+                    }
+                    else
+                        throw new ParseException(
+                            String.Format("expected decimal number but found '{0}'.", c == -1 ? "<EOF>" : ((char)c).ToString()),
+                            Context
+                            );
+
+                    c = Context.Peek();
+                    if (IsTerminalCharacter((char)c) || c == -1 || c == 'e' || c == 'E')
+                        break;
+                }
+                
+                bCastToDouble = true;
+                tFracPart += tIntPart;
+            }
+
+            // ===== 指数部分 =====
+            c = Context.Peek();
+            if (c == 'e' || c == 'E')
+            {
+                c = Context.Read();
+
+                // 检查符号
+                double bSymbol = 1;
+                c = Context.Peek();
+                if (c == '-')
+                {
+                    Context.Read();
+                    bSymbol = -1;
+                }
+
+                uint tExpValue = 0;
+                while (true)
+                {
+                    c = Context.Read();
+                    if (IsNumberCharacter((char)c))
+                    {
+                        tExpValue = tExpValue * 10 + (uint)(c - '0');
+                    }
+                    else
+                        throw new ParseException(
+                            String.Format("expected decimal number but found '{0}'.", c == -1 ? "<EOF>" : ((char)c).ToString()),
+                            Context
+                            );
+
+                    c = Context.Peek();
+                    if (IsTerminalCharacter((char)c) || c == -1)
+                        break;
+                }
+
+                // 以指数形式结束
+                if (bCastToDouble)
+                {
+                    return tFracPart * Math.Pow(10, bSymbol * tExpValue);
+                }
+                else
+                {
+                    return tIntPart * Math.Pow(10, bSymbol * tExpValue);
+                }
+            }
+
+            // 无指数部分
+            if (bCastToDouble)
+                return tFracPart;
+            else
+                return tIntPart;
+        }
+
+        // 解析数字或者符号或者逻辑型
+        private static object ParseSymbolOrNumberOrBoolean(ParseContext Context, out DataFormatType FormatType)
+        {
+            int c = Context.Peek();
+            if (IsNumberCharacter((char)c))
+            {
+                object ret = ParseUnsignedNumber(Context, out FormatType);
+                if (FormatType == DataFormatType.HexInteger)
+                    return (long)ret;
+                else
+                    return ret;
+            }
+            else if (c == -1)
+                throw new ParseException("unexpected character '<EOF>'.", Context);
+            else
+            {
+                StringBuilder tStrBuilder = null;
+                if (c == '-')
+                {
+                    Context.Read();
+                    c = Context.Peek();
+                    if (IsNumberCharacter((char)c))
+                    {
+                        object ret = ParseUnsignedNumber(Context, out FormatType);
+                        if (ret.GetType() == typeof(ulong))
+                            return -(long)((ulong)ret);
+                        else if (ret.GetType() == typeof(double))
+                            return -(double)ret;
+                        else
+                            throw new ParseException("internal error.", Context);
+                    }
+                    else
+                    {
+                        tStrBuilder = new StringBuilder();
+                        tStrBuilder.Append('-');
+                    }
+                }
+                else
+                    tStrBuilder = new StringBuilder();
+
+                while (true)
+                {
+                    if (IsTerminalCharacter((char)c) || c == -1)
+                    {
+                        FormatType = DataFormatType.None;
+
+                        string ret = tStrBuilder.ToString();
+                        if (ret == "#true")
+                            return true;
+                        else if (ret == "#false")
+                            return false;
+                        else
+                            return ret;
+                    }
+                    else if (c == '\\')
+                    {
+                        Context.Read();
+                        tStrBuilder.Append(ParseEscapeCharacter(Context));
+                    }
+                    else
+                    {
+                        tStrBuilder.Append((char)c);
+                        Context.Read();
+                    }
+                    c = Context.Peek();
+                }
+            }
+        }
+
+        // 解析无后缀语法值
+        private static void ParseNonPostfixValue(ParseContext Context)
+        {
+            // TODO
         }
         #endregion
 
@@ -573,7 +777,16 @@ namespace Bakachu.GLN
         /// <param name="SourceDesc">源描述</param>
         public static void FromReader(TextReader Source, IParseListener Listener, string SourceDesc = "user")
         {
-            DoParse(new ParseContext(Source, Listener, SourceDesc));
+            throw new NotImplementedException();
+            // DoParse(new ParseContext(Source, Listener, SourceDesc));
+        }
+
+        public static void Test()
+        {
+            ParseContext t = new ParseContext(new StringReader("-0xFF sa"), null);
+            DataFormatType tt;
+            object a = ParseSymbolOrNumberOrBoolean(t, out tt);
+
         }
         #endregion
     }

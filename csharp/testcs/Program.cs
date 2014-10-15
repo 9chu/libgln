@@ -11,7 +11,7 @@ namespace testcs
     {
         static void Main(string[] args)
         {
-            
+            Parser.Test();
         }
     }
 }
