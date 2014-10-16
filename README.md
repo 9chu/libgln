@@ -9,7 +9,7 @@ libgln实现一套基于这种语法的解析库。
 e.g:
 ```
         shop {
-            bookshelf : (lastAccess:"10 days ago") {
+            bookshelf : [lastAccess:"10 days ago"] {
                 book(name:"The CXX Programming Language" price:450.0)
             }
         }

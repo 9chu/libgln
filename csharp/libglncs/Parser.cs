@@ -20,6 +20,7 @@ namespace Bakachu.GLN
         /// </summary>
         public enum DataType
         {
+            Empty,       // 内部使用
             Character,   // 字符
             Boolean,     // 逻辑
             Integer,     // 整数
@@ -44,127 +45,18 @@ namespace Bakachu.GLN
         }
 
         /// <summary>
-        /// 解析上下文
-        /// </summary>
-        public class ParseContext
-        {
-            private TextReader _Reader;
-            private IParseListener _Listener;
-            private string _SourceDesc;
-            private long _Position = 0;
-            private long _Line = 1;
-            private long _Row = 1;
-
-            /// <summary>
-            /// 监听器
-            /// </summary>
-            public IParseListener Listener
-            {
-                get
-                {
-                    return _Listener;
-                }
-            }
-
-            /// <summary>
-            /// 源的描述名称
-            /// </summary>
-            public string SourceDesc
-            {
-                get
-                {
-                    return _SourceDesc;
-                }
-            }
-
-            /// <summary>
-            /// 位置
-            /// </summary>
-            public long Position
-            {
-                get
-                {
-                    return _Position;
-                }
-            }
-
-            /// <summary>
-            /// 行号
-            /// </summary>
-            public long Line
-            {
-                get
-                {
-                    return _Line;
-                }
-            }
-
-            /// <summary>
-            /// 列号
-            /// </summary>
-            public long Row
-            {
-                get
-                {
-                    return _Row;
-                }
-            }
-
-            /// <summary>
-            /// 获取下一个字符，若到达结尾则返回-1
-            /// </summary>
-            /// <returns>读取的值</returns>
-            internal int Peek()
-            {
-                return _Reader.Peek();
-            }
-            
-            /// <summary>
-            /// 获取下一个字符，若到达结尾则返回-1
-            /// </summary>
-            /// <returns>读取的值</returns>
-            internal int Read()
-            {
-                int c = _Reader.Read();
-                if ((c == '\r' && _Reader.Peek() != '\n') || c == '\n')
-                {
-                    _Line++;
-                    _Row = 0;
-                }
-                if (c != -1)
-                {
-                    _Position++;
-                    _Row++;
-                }
-                return c;
-            }
-
-            /// <summary>
-            /// 解析上下文
-            /// </summary>
-            /// <param name="Reader">读取器</param>
-            /// <param name="Listener">监听器</param>
-            /// <param name="SourceDesc">源描述</param>
-            internal ParseContext(TextReader Reader, IParseListener Listener, string SourceDesc = "user")
-            {
-                _Reader = Reader;
-                _Listener = Listener;
-                _SourceDesc = SourceDesc;
-            }
-        }
-
-        /// <summary>
         /// 解析过程回调函数
         /// </summary>
         public interface IParseListener
         {
             /// <summary>
-            /// 正在解析一个原子值
+            /// 正在解析一个值
             /// </summary>
             /// <param name="Context">上下文</param>
-            /// <param name="AtomType">数据类型</param>
+            /// <param name="ValueType">数据类型</param>
             /// <param name="FormatType">格式化类型</param>
             /// <param name="Value">值</param>
+            /// <param name="Parent">父列表</param>
             /// <remarks>
             /// 对于Value参数：
             ///     Character使用char传参
@@ -172,33 +64,28 @@ namespace Bakachu.GLN
             ///     Integer使用long传参
             ///     Real使用double传参
             ///     String和Symbol使用string传参
+            ///     List使用OnBeginList的返回值传参
             /// </remarks>
-            void OnParseAtomValue(ParseContext Context, DataType AtomType, DataFormatType FormatType, object Value);
+            void OnParseValue(DataType ValueType, DataFormatType FormatType, object Value, object Parent);
 
             /// <summary>
             /// 解析到一个注释
             /// </summary>
             /// <param name="Context">上下文</param>
             /// <param name="Comment">注释</param>
-            void OnParseComment(ParseContext Context, string Comment);
+            void OnParseComment(string Comment);
 
             /// <summary>
             /// 开始解析一个列表
             /// </summary>
-            void OnStartParseList(ParseContext Context);
-
-            /// <summary>
-            /// 结束对一个列表的解析
-            /// </summary>
-            /// <param name="Context">上下文</param>
-            /// <param name="FormatType">列表的格式化类型</param>
-            void OnEndParseList(ParseContext Context, DataFormatType FormatType);
+            /// <returns>用户定义的列表容器</returns>
+            object OnParseList();
 
             /// <summary>
             /// 结束解析
             /// </summary>
             /// <param name="Context">上下文</param>
-            void OnReachEOF(ParseContext Context);
+            void OnReachEOF();
         }
 
         /// <summary>
@@ -271,7 +158,7 @@ namespace Bakachu.GLN
             /// </summary>
             /// <param name="Message">异常信息</param>
             /// <param name="Context">上下文</param>
-            public ParseException(string Message, ParseContext Context)
+            internal ParseException(string Message, ParseContext Context)
                 : base(CombineExceptionMessage(Message, Context))
             {
                 _RawMessage = Message;
@@ -378,6 +265,114 @@ namespace Bakachu.GLN
         #endregion
 
         #region 解析函数
+        // 解析上下文
+        internal class ParseContext
+        {
+            private TextReader _Reader;
+            private IParseListener _Listener;
+            private string _SourceDesc;
+            private long _Position = 0;
+            private long _Line = 1;
+            private long _Row = 1;
+
+            /// <summary>
+            /// 监听器
+            /// </summary>
+            public IParseListener Listener
+            {
+                get
+                {
+                    return _Listener;
+                }
+            }
+
+            /// <summary>
+            /// 源的描述名称
+            /// </summary>
+            public string SourceDesc
+            {
+                get
+                {
+                    return _SourceDesc;
+                }
+            }
+
+            /// <summary>
+            /// 位置
+            /// </summary>
+            public long Position
+            {
+                get
+                {
+                    return _Position;
+                }
+            }
+
+            /// <summary>
+            /// 行号
+            /// </summary>
+            public long Line
+            {
+                get
+                {
+                    return _Line;
+                }
+            }
+
+            /// <summary>
+            /// 列号
+            /// </summary>
+            public long Row
+            {
+                get
+                {
+                    return _Row;
+                }
+            }
+
+            /// <summary>
+            /// 获取下一个字符，若到达结尾则返回-1
+            /// </summary>
+            /// <returns>读取的值</returns>
+            internal int Peek()
+            {
+                return _Reader.Peek();
+            }
+
+            /// <summary>
+            /// 获取下一个字符，若到达结尾则返回-1
+            /// </summary>
+            /// <returns>读取的值</returns>
+            internal int Read()
+            {
+                int c = _Reader.Read();
+                if ((c == '\r' && _Reader.Peek() != '\n') || c == '\n')
+                {
+                    _Line++;
+                    _Row = 0;
+                }
+                if (c != -1)
+                {
+                    _Position++;
+                    _Row++;
+                }
+                return c;
+            }
+
+            /// <summary>
+            /// 解析上下文
+            /// </summary>
+            /// <param name="Reader">读取器</param>
+            /// <param name="Listener">监听器</param>
+            /// <param name="SourceDesc">源描述</param>
+            internal ParseContext(TextReader Reader, IParseListener Listener, string SourceDesc = "user")
+            {
+                _Reader = Reader;
+                _Listener = Listener;
+                _SourceDesc = SourceDesc;
+            }
+        }
+
         // 匹配字符
         private static void Match(ParseContext Context, char c)
         {
@@ -387,15 +382,19 @@ namespace Bakachu.GLN
         }
 
         // 跳过空白
-        private static void SkipBlank(ParseContext Context)
+        private static bool SkipBlank(ParseContext Context)
         {
+            bool bBlank = false;
             while (true)
             {
                 int c = Context.Peek();
                 if (c == -1 || !IsBlankCharacter((char)c))
-                    break;
+                    return bBlank;
                 else
+                {
+                    bBlank = true;
                     Context.Read();
+                }   
             }
         }
 
@@ -439,16 +438,21 @@ namespace Bakachu.GLN
         }
 
         // 解析注释
-        private static string ParseComment(ParseContext Context)
+        private static bool ParseComment(ParseContext Context)
         {
-            Match(Context, ';');
+            if (Context.Peek() != ';')
+                return false;
 
+            Context.Read();
             StringBuilder ret = new StringBuilder();
             while (true)
             {
                 int c = Context.Read();
                 if ((c == '\r' && Context.Peek() != '\n') || c == '\n' || c == -1)  // CR, CRLF or LF
-                    return ret.ToString();
+                {
+                    Context.Listener.OnParseComment(ret.ToString());
+                    return true;
+                }
                 else
                     ret.Append((char)c);
             }
@@ -510,7 +514,7 @@ namespace Bakachu.GLN
         }
 
         // 解析数字
-        private static object ParseUnsignedNumber(ParseContext Context, out DataFormatType FormatType)
+        private static object ParseUnsignedNumber(ParseContext Context, out DataType ValueType, out DataFormatType FormatType)
         {
             bool bCastToDouble = false;
             FormatType = DataFormatType.None;
@@ -550,8 +554,9 @@ namespace Bakachu.GLN
                             break;
                     }
 
+                    ValueType = DataType.Integer;
                     FormatType = DataFormatType.HexInteger;
-                    return tIntPart;
+                    return (long)tIntPart;
                 }
             }
             else if (IsNonZeroNumberCharacter((char)c))  // 读取数字
@@ -648,33 +653,35 @@ namespace Bakachu.GLN
                 // 以指数形式结束
                 if (bCastToDouble)
                 {
+                    ValueType = DataType.Real;
                     return tFracPart * Math.Pow(10, bSymbol * tExpValue);
                 }
                 else
                 {
+                    ValueType = DataType.Real;
                     return tIntPart * Math.Pow(10, bSymbol * tExpValue);
                 }
             }
 
             // 无指数部分
             if (bCastToDouble)
+            {
+                ValueType = DataType.Real;
                 return tFracPart;
+            }
             else
-                return tIntPart;
+            {
+                ValueType = DataType.Integer;
+                return (long)tIntPart;
+            }
         }
 
         // 解析数字或者符号或者逻辑型
-        private static object ParseSymbolOrNumberOrBoolean(ParseContext Context, out DataFormatType FormatType)
+        private static object ParseSymbolOrNumberOrBoolean(ParseContext Context, out DataType ValueType, out DataFormatType FormatType)
         {
             int c = Context.Peek();
             if (IsNumberCharacter((char)c))
-            {
-                object ret = ParseUnsignedNumber(Context, out FormatType);
-                if (FormatType == DataFormatType.HexInteger)
-                    return (long)ret;
-                else
-                    return ret;
-            }
+                return ParseUnsignedNumber(Context, out ValueType, out FormatType);
             else if (c == -1)
                 throw new ParseException("unexpected character '<EOF>'.", Context);
             else
@@ -686,13 +693,16 @@ namespace Bakachu.GLN
                     c = Context.Peek();
                     if (IsNumberCharacter((char)c))
                     {
-                        object ret = ParseUnsignedNumber(Context, out FormatType);
-                        if (ret.GetType() == typeof(ulong))
-                            return -(long)((ulong)ret);
-                        else if (ret.GetType() == typeof(double))
-                            return -(double)ret;
-                        else
-                            throw new ParseException("internal error.", Context);
+                        object ret = ParseUnsignedNumber(Context, out ValueType, out FormatType);
+                        switch (ValueType)
+                        {
+                            case DataType.Integer:
+                                return -(long)ret;
+                            case DataType.Real:
+                                return -(double)ret;
+                            default:
+                                throw new ParseException("internal error.", Context);
+                        }   
                     }
                     else
                     {
@@ -711,11 +721,20 @@ namespace Bakachu.GLN
 
                         string ret = tStrBuilder.ToString();
                         if (ret == "#true")
+                        {
+                            ValueType = DataType.Boolean;
                             return true;
+                        }
                         else if (ret == "#false")
+                        {
+                            ValueType = DataType.Boolean;
                             return false;
+                        }
                         else
+                        {
+                            ValueType = DataType.Symbol;
                             return ret;
+                        }
                     }
                     else if (c == '\\')
                     {
@@ -732,10 +751,197 @@ namespace Bakachu.GLN
             }
         }
 
-        // 解析无后缀语法值
-        private static void ParseNonPostfixValue(ParseContext Context)
+        // 解析前缀元素
+        //   不处理空白和注释
+        //   对于非LIST对象不触发回调
+        private static object ParseNonPostfixValue(ParseContext Context, out DataType ValueType, out DataFormatType FormatType)
         {
-            // TODO
+            int c = Context.Peek();
+            switch (c)
+            {
+                case '\'':
+                    ValueType = DataType.Character;
+                    FormatType = DataFormatType.None;
+                    return ParseCharacter(Context);
+                case '"':
+                    ValueType = DataType.String;
+                    FormatType = DataFormatType.None;
+                    return ParseString(Context);
+                case '[':
+                    {
+                        ValueType = DataType.List;
+                        FormatType = DataFormatType.SList;
+
+                        Context.Read();
+                        object tContainer = Context.Listener.OnParseList();
+
+                        object tSub;
+                        DataType tSubValueType;
+                        DataFormatType tSubFormatType;
+                        while (true)
+                        {
+                            tSub = ParseElement(Context, out tSubValueType, out tSubFormatType, tContainer);
+                            if (tSubValueType != DataType.Empty)
+                                Context.Listener.OnParseValue(tSubValueType, tSubFormatType, tSub, tContainer);
+                            else
+                                break;
+                        }
+                        Match(Context, ']');
+
+                        return tContainer;
+                    }
+                default:
+                    if (IsTerminalCharacter((char)c) || c == -1)  // 一般不会执行到，保险起见
+                        throw new ParseException(
+                            String.Format("unexpected character '{0}'.", c == -1 ? "<EOF>" : ((char)c).ToString()),
+                            Context
+                            );
+                    else
+                        return ParseSymbolOrNumberOrBoolean(Context, out ValueType, out FormatType);
+            }
+        }
+
+        // 解析元素
+        //   处理空白和注释
+        //   忽略终结符并返回Empty
+        //   完成ExList或者TList的语法解析
+        private static object ParseElement(ParseContext Context, out DataType ValueType, out DataFormatType FormatType, object Parent, bool bExList = true)
+        {
+            // 跳过空白和注释
+            while (SkipBlank(Context) || ParseComment(Context)) { }
+
+            // 检查下一个字符是否为除'['以外的终结符
+            int c = Context.Peek();
+            if ((c != '[' && IsTerminalCharacter((char)c)) || c == -1)
+            {
+                ValueType = DataType.Empty;
+                FormatType = DataFormatType.None;
+                return null;
+            }
+
+            // 解析前缀部分
+            DataType tSubValueType;
+            DataFormatType tSubFormatType;
+            object tSub = ParseNonPostfixValue(Context, out tSubValueType, out tSubFormatType);
+
+            while (true)
+            {
+                // 跳过空白和注释
+                while (SkipBlank(Context) || ParseComment(Context)) { }
+
+                // 是否为TList或者ExList
+                c = Context.Peek();
+                if (c == '(' || (bExList && (c == ':' || c == '{')))
+                {
+                    Context.Read();
+
+                    // 跳过空白和注释
+                    while (SkipBlank(Context) || ParseComment(Context)) { }
+
+                    if (c == '(')  // TList语法
+                    {
+                        // 扩展tSub
+                        object tContainer = Context.Listener.OnParseList();
+
+                        // 将之前的结果加入列表
+                        Context.Listener.OnParseValue(tSubValueType, tSubFormatType, tSub, tContainer);
+
+                        // 读取一组Element
+                        while (true)
+                        {
+                            tSub = ParseElement(Context, out tSubValueType, out tSubFormatType, tContainer);
+                            if (tSubValueType != DataType.Empty)
+                                Context.Listener.OnParseValue(tSubValueType, tSubFormatType, tSub, tContainer);
+                            else
+                                break;
+                        }
+
+                        // 匹配结尾
+                        Match(Context, ')');
+
+                        tSubValueType = DataType.List;
+                        tSubFormatType = DataFormatType.TList;
+                        tSub = tContainer;
+                    }
+
+                    bool bPair = false;
+                    if (c == ':')  // ExList语法
+                    {
+                        object tContainer = tSub;
+
+                        // 若之前的类型不为List，则对其进行扩展
+                        // 否则丢弃之前的Format
+                        if (tSubValueType != DataType.List)
+                        {
+                            // 扩展tSub
+                            tContainer = Context.Listener.OnParseList();
+
+                            // 将之前的结果加入列表
+                            Context.Listener.OnParseValue(tSubValueType, tSubFormatType, tSub, tContainer);
+                        }
+
+                        // 读取一个不包含ExList的元素
+                        tSub = ParseElement(Context, out tSubValueType, out tSubFormatType, tContainer, false);
+                        if (tSubValueType != DataType.Empty)
+                            Context.Listener.OnParseValue(tSubValueType, tSubFormatType, tSub, tContainer);
+                        else
+                            throw new ParseException("expect element after ':'.", Context);
+
+                        // 跳过空白和注释
+                        while (SkipBlank(Context) || ParseComment(Context)) { }
+
+                        // 解析后续的'{'
+                        c = Context.Peek();
+                        if (c == '{')
+                            Context.Read();
+
+                        bPair = true;
+                        tSubValueType = DataType.List;
+                        tSubFormatType = DataFormatType.ExListPair;
+                        tSub = tContainer;
+                    }
+
+                    if (c == '{')  // ExList语法
+                    {
+                        object tContainer = tSub;
+
+                        // 若之前的类型不为List，则对其进行扩展
+                        // 否则丢弃之前的Format
+                        if (tSubValueType != DataType.List)
+                        {
+                            // 扩展tSub
+                            tContainer = Context.Listener.OnParseList();
+
+                            // 将之前的结果加入列表
+                            Context.Listener.OnParseValue(tSubValueType, tSubFormatType, tSub, tContainer);
+                        }
+
+                        // 读取一组Element
+                        while (true)
+                        {
+                            tSub = ParseElement(Context, out tSubValueType, out tSubFormatType, tContainer);
+                            if (tSubValueType != DataType.Empty)
+                                Context.Listener.OnParseValue(tSubValueType, tSubFormatType, tSub, tContainer);
+                            else
+                                break;
+                        }
+
+                        // 匹配结尾
+                        Match(Context, '}');
+
+                        tSubValueType = DataType.List;
+                        tSubFormatType = bPair ? DataFormatType.ExListFull : DataFormatType.ExListBlock;
+                        tSub = tContainer;
+                    }
+                }
+                else
+                {
+                    // 结束
+                    ValueType = tSubValueType;
+                    FormatType = tSubFormatType;
+                    return tSub;
+                }
+            }
         }
         #endregion
 
@@ -777,16 +983,21 @@ namespace Bakachu.GLN
         /// <param name="SourceDesc">源描述</param>
         public static void FromReader(TextReader Source, IParseListener Listener, string SourceDesc = "user")
         {
-            throw new NotImplementedException();
-            // DoParse(new ParseContext(Source, Listener, SourceDesc));
-        }
+            ParseContext tContext = new ParseContext(Source, Listener, SourceDesc);
 
-        public static void Test()
-        {
-            ParseContext t = new ParseContext(new StringReader("-0xFF sa"), null);
-            DataFormatType tt;
-            object a = ParseSymbolOrNumberOrBoolean(t, out tt);
+            while (true)
+            {
+                DataType tValueType;
+                DataFormatType tFormatType;
+                object tObj = ParseElement(tContext, out tValueType, out tFormatType, null);
 
+                if (tValueType != DataType.Empty)
+                    tContext.Listener.OnParseValue(tValueType, tFormatType, tObj, null);
+                else
+                    break;
+            }
+
+            tContext.Listener.OnReachEOF();
         }
         #endregion
     }
