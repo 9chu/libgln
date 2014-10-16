@@ -34,6 +34,16 @@ e.g:
 
 详细语法定义见 glnsyntax.md
 
+### 基础数据类型实现
+    类型         | 存储类型(C#)     | 存储类型(C++)
+    ------------ | ---------------- | ---------------------------
+    逻辑         | bool             | bool
+    字符         | char             | char16_t / wchar_t(MSVC)
+    整数         | long             | int64_t
+    实数         | double           | double
+    字符串       | string           | u16string / wstring(MSVC)
+    符号         | string           | u16string / wstring(MSVC)
+
 ### 编译
 #### VisualStudio环境
 

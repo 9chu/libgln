@@ -946,6 +946,66 @@ namespace Bakachu.GLN
         #endregion
 
         #region 接口函数
+        private class ValueConstructor : Bakachu.GLN.Parser.IParseListener
+        {
+            private List<Value> _RootList = new List<Value>();
+
+            public List<Value> Root
+            {
+                get
+                {
+                    return _RootList;
+                }
+            }
+
+            public void OnParseValue(Bakachu.GLN.Parser.DataType ValueType, Bakachu.GLN.Parser.DataFormatType FormatType, object Value, object Parent)
+            {
+                List<Value> tTarget = Parent == null ? _RootList : (List<Value>)Parent;
+
+                switch (ValueType)
+                {
+                    case DataType.Character:
+                        tTarget.Add(new Value((char)Value));
+                        break;
+                    case DataType.Boolean:
+                        tTarget.Add(new Value((bool)Value));
+                        break;
+                    case DataType.Integer:
+                        tTarget.Add(new Value((long)Value, FormatType == DataFormatType.HexInteger));
+                        break;
+                    case DataType.Real:
+                        tTarget.Add(new Value((double)Value));
+                        break;
+                    case DataType.String:
+                        tTarget.Add(new Value((string)Value));
+                        break;
+                    case DataType.Symbol:
+                        tTarget.Add(new Value((string)Value, true));
+                        break;
+                    case DataType.List:
+                        tTarget.Add(new Value((List<Value>)Value, FormatType));
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+            public void OnParseComment(string Comment)
+            {
+                // 忽略注释
+            }
+
+            public object OnParseList()
+            {
+                return new List<Value>();
+            }
+
+            public void OnReachEOF()
+            {
+                // 忽略EOF信息
+            }
+        }
+
         /// <summary>
         /// 从字符串进行解析
         /// </summary>
@@ -964,7 +1024,7 @@ namespace Bakachu.GLN
         /// </summary>
         /// <param name="SourceFile">源</param>
         /// <param name="Listener">解析回调</param>
-        /// <param name="Enc">编码</param>
+        /// <param name="Enc">编码，默认UTF8</param>
         public static void FromFile(string SourceFile, IParseListener Listener, Encoding Enc = null)
         {
             if (Enc == null)
@@ -998,6 +1058,44 @@ namespace Bakachu.GLN
             }
 
             tContext.Listener.OnReachEOF();
+        }
+
+        /// <summary>
+        /// 从字符串解析到List
+        /// </summary>
+        /// <param name="Source">字符串源</param>
+        /// <returns>解析结果</returns>
+        public static Value ParseToListFromString(string Source)
+        {
+            ValueConstructor tConstructor = new ValueConstructor();
+            FromString(Source, tConstructor);
+            return new Value(tConstructor.Root);
+        }
+
+        /// <summary>
+        /// 从文件解析到List
+        /// </summary>
+        /// <param name="SourceFile">文件源</param>
+        /// <param name="Enc">编码，默认UTF8</param>
+        /// <returns>解析结果</returns>
+        public static Value ParseToListFromFile(string SourceFile, Encoding Enc = null)
+        {
+            ValueConstructor tConstructor = new ValueConstructor();
+            FromFile(SourceFile, tConstructor, Enc);
+            return new Value(tConstructor.Root);
+        }
+
+        /// <summary>
+        /// 从TextReader解析到List
+        /// </summary>
+        /// <param name="Source">源</param>
+        /// <param name="SourceDesc">源描述</param>
+        /// <returns>解析结果</returns>
+        public static Value ParseToListFromReader(TextReader Source, string SourceDesc = "user")
+        {
+            ValueConstructor tConstructor = new ValueConstructor();
+            FromReader(Source, tConstructor, SourceDesc);
+            return new Value(tConstructor.Root);
         }
         #endregion
     }

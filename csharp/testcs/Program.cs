@@ -52,9 +52,20 @@ namespace testcs
 
             if (o.GetType() == typeof(ArrayList))
             {
-                ArrayList t = (ArrayList)o;
+                foreach (object x in (ArrayList)o)
+                {
+                    PrintList(x, Indent + 1);
+                }
+            }
+        }
 
-                foreach (object x in t)
+        static void PrintList(Bakachu.GLN.Value o, int Indent = 0)
+        {
+            Console.WriteLine(new String(' ', Indent * 3) + o.ToString());
+
+            if (o.ValueType == Bakachu.GLN.Parser.DataType.List)
+            {
+                foreach (Bakachu.GLN.Value x in o.ToList())
                 {
                     PrintList(x, Indent + 1);
                 }
@@ -71,6 +82,8 @@ namespace testcs
                 }
             ";
 
+            /*
+             * TEST 1
             TestListener tListener = new TestListener();
 
             try
@@ -81,8 +94,18 @@ namespace testcs
             {
                 Console.WriteLine("<ERROR> " + e.Message);
             }
-
+            
             PrintList(tListener.Root);
+            */
+
+            /*
+             * TEST2
+             */
+            Bakachu.GLN.Value tResult = Bakachu.GLN.Parser.ParseToListFromString(tTestSource);
+
+            PrintList(tResult);
+
+            Console.Write(tResult.Write(new Bakachu.GLN.Value.ValueOutputFormat()));
 
             Console.ReadKey();
         }
